@@ -1,0 +1,60 @@
+*.iml
+.kotlin
+.gradle
+**/build/
+xcuserdata
+!src/**/build/
+local.properties
+.idea
+.DS_Store
+captures
+.externalNativeBuild
+.cxx
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+**/xcshareddata/WorkspaceSettings.xcsettings
+node_modules/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+.terraform.lock.hcl
+terraform/backend.tf
+**/backend.tf
+override.tf
+override.tf.json
+
+# Secrets & credentials
+*.tfvars
+!*.tfvars.example
+.env
+.env.*
+!.env.example
+
+# Lambda build artifacts
+lambda/authorizer/layer.zip
+lambda/authorizer/handler.zip
+lambda/authorizer/_build/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+
+
+#Steps && writeups
+Steps/SecAnalysis.md
+Steps/KnownLimitations.md
+Steps/PhasePlan.md

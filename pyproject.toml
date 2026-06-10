@@ -1,0 +1,30 @@
+[project]
+name = "iam-gateway"
+version = "0.1.0"
+description = "Multitenant GenAI Gateway with IAM and ABAC isolation"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[dependency-groups]
+dev = [
+    "boto3>=1.43.26",
+    "cryptography>=44.0.0",
+    "PyJWT>=2.9.0",
+    "pytest>=9.0.3",
+    "requests>=2.32.0",
+    "ruff>=0.15.16",
+]

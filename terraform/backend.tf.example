@@ -1,0 +1,15 @@
+# Copy this file to backend.tf (gitignored) and replace placeholders
+# with outputs from: cd terraform/bootstrap && terraform apply
+#
+#   terraform output state_bucket_name
+#   terraform output lock_table_name
+
+terraform {
+  backend "s3" {
+    bucket         = "REPLACE_WITH_state_bucket_name"
+    key            = "iam-gateway/dev/terraform.tfstate"
+    region         = "eu-central-1"
+    dynamodb_table = "REPLACE_WITH_lock_table_name"
+    encrypt        = true
+  }
+}
