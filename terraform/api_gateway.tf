@@ -75,17 +75,18 @@ resource "aws_api_gateway_method" "chat_post" {
   }
 }
 
-# ─── MOCK integration (placeholder – replaced with Lambda in Phase 03) ────────
+# ─── Lambda integration: POST /chat → sts_session Lambda ─────────────────────
+# AWS_PROXY passes the full request to Lambda; Lambda controls the response.
+# Resource-based policy (aws_lambda_permission.apigw_invoke_sts) authorises
+# API GW to invoke the function – no IAM credentials needed here.
 
-resource "aws_api_gateway_integration" "chat_mock" {
-  rest_api_id = aws_api_gateway_rest_api.main.id
-  resource_id = aws_api_gateway_resource.chat.id
-  http_method = aws_api_gateway_method.chat_post.http_method
-  type        = "MOCK"
-
-  request_templates = {
-    "application/json" = jsonencode({ statusCode = 200 })
-  }
+resource "aws_api_gateway_integration" "chat_lambda" {
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.chat.id
+  http_method             = aws_api_gateway_method.chat_post.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.sts_session.invoke_arn
 }
 
 resource "aws_api_gateway_method_response" "chat_200" {
@@ -99,19 +100,6 @@ resource "aws_api_gateway_method_response" "chat_200" {
   }
 }
 
-resource "aws_api_gateway_integration_response" "chat_mock" {
-  rest_api_id = aws_api_gateway_rest_api.main.id
-  resource_id = aws_api_gateway_resource.chat.id
-  http_method = aws_api_gateway_method.chat_post.http_method
-  status_code = aws_api_gateway_method_response.chat_200.status_code
-
-  response_templates = {
-    "application/json" = jsonencode({ message = "ok" })
-  }
-
-  depends_on = [aws_api_gateway_integration.chat_mock]
-}
-
 # ─── Deployment + Stage ───────────────────────────────────────────────────────
 
 resource "aws_api_gateway_deployment" "main" {
@@ -121,7 +109,7 @@ resource "aws_api_gateway_deployment" "main" {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.chat.id,
       aws_api_gateway_method.chat_post.id,
-      aws_api_gateway_integration.chat_mock.id,
+      aws_api_gateway_integration.chat_lambda.id,
       aws_api_gateway_resource.revoke.id,
       aws_api_gateway_method.revoke_post.id,
       aws_api_gateway_integration.revoke_post.id,
@@ -134,8 +122,7 @@ resource "aws_api_gateway_deployment" "main" {
 
   depends_on = [
     aws_api_gateway_method.chat_post,
-    aws_api_gateway_integration.chat_mock,
-    aws_api_gateway_integration_response.chat_mock,
+    aws_api_gateway_integration.chat_lambda,
     aws_api_gateway_method.revoke_post,
     aws_api_gateway_integration.revoke_post,
   ]

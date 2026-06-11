@@ -1,24 +1,21 @@
-# HANDOFF – 2026-06-10
+# HANDOFF – 2026-06-11
 
 ## Stan projektu
-- Aktualna faza: Phase 02 – Autentykacja i JWT ✅ UKOŃCZONA
-- Ostatni ukończony etap: Step 05 – Testy end-to-end JWT
-- Status testów: zielone (94 testów: 49 infra + 45 auth; 6 post-apply API GW skipped bez AWS)
+- Aktualna faza: Phase 04 – Input Security (Sanitization + Sandwich Method) — **UKOŃCZONA**
+- Ostatni ukończony etap: Step 05 – Testy bezpieczeństwa (prompt injection, PII leakage, jailbreak, edge cases, pipeline invariants)
+- Status testów: zielone (398/398 + 2 xfailed)
+- Infrastruktura: `terraform apply` zastosowany – Lambda ZIP z pełnym modułem `sanitizer/` wdrożona
 
 ## Następny krok
-Phase 03 / Step 01 – IAM Role docelowa z ABAC
-
-Zbudować/zweryfikować Terraform dla docelowej roli IAM (już istnieje jako `aws_iam_role.bedrock_scoped` w `terraform/iam.tf`) i napisać Lambda która:
-1. Przyjmuje JWT context z `requestContext.authorizer` (user_id, department, clearance_level)
-2. Wywołuje `sts.assume_role()` z session tags: `department`, `clearance_level`
-3. Zwraca tymczasowe credentials STS
-4. Weryfikuje że ABAC conditions na roli blokują dostęp bez tagów
+Phase 05 – (do zaplanowania w następnej sesji na podstawie PhasePlan.md)
 
 ## Otwarte kwestie
-- Phase 03 Step 02: Lambda STS assume_role – wymagana jest Lambda "chat handler" która zastąpi MOCK integration w API Gateway
-- Phase 03 Step 03: STS credentials cache – keyed `user_id:clearance_level`, TTL-aware (expiry STS minus 60s)
-- Phase 03 Step 04: Bedrock boto3 client inicjalizowany z STS credentials per request
-- `aws_iam_role.bedrock_scoped` już istnieje w terraform/iam.tf – sprawdzić czy ABAC conditions są kompletne przed Phase 03
+- **Bedrock model access** – wymagane ręczne włączenie w Bedrock console → Model Access → "Amazon Titan Text Express v1". Bez tego e2e testy akceptują 502 jako "auth passed".
+- **Cache key nie zawiera `department`** – jeśli user zmieni dział między warm invocations, dostanie credentials scoped do starego działu przez max 840s. Odłożone do Phase 05.
+- **Znane ograniczenia regex-only detection** (udokumentowane jako xfail w test_step05_security.py):
+  - Polskie wzorce injection (np. "Zignoruj poprzednie instrukcje") – nie wykrywane
+  - Base64/ROT13-encoded injection – nie wykrywane
+  - Obie klasy zaadresowane semantyczną detekcją w Phase 10
 
-## Zmodyfikowane pliki
-lambda/authorizer/handler.py lambda/authorizer/requirements.txt lambda/revoke/handler.py scripts/build_authorizer_layer.py scripts/create_test_users.py scripts/get_jwt.py tests/auth/conftest.py tests/auth/test_step01_test_users.py tests/auth/test_step02_authorizer.py tests/auth/test_step04_revoke.py tests/auth/test_step05_e2e_jwt.py tests/infra/test_step07_api_gateway.py tests/conftest.py terraform/api_gateway.tf terraform/lambda_authorizer.tf terraform/lambda_revoke.tf terraform/iam.tf terraform/dynamodb.tf terraform/s3.tf terraform/cognito.tf terraform/cloudtrail.tf terraform/versions.tf terraform/main.tf terraform/variables.tf terraform/outputs.tf STEPS/PhasePlan.md STEPS/Phase01_WriteUp.md STEPS/Phase02_WriteUp.md STEPS/HANDOFF.md CLAUDE.md .gitignore pyproject.toml
+## Zmodyfikowane pliki (Phase 04)
+lambda/sts/handler.py lambda/sanitizer/__init__.py lambda/sanitizer/patterns.py lambda/sanitizer/sanitizer.py lambda/sanitizer/sandwich.py lambda/sanitizer/policy.py terraform/lambda_sts.tf tests/conftest.py tests/sanitizer/test_step01_patterns.py tests/sanitizer/test_step02_lambda_sanitize.py tests/sanitizer/test_step03_sandwich.py tests/sanitizer/test_step04_policy.py tests/sanitizer/test_step05_security.py tests/sts/test_step01_iam_abac.py tests/sts/test_step04_bedrock_client.py tests/sts/test_step05_scope_isolation.py STEPS/Phase04_WriteUp.md STEPS/HANDOFF.md

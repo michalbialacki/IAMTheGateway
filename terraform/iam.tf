@@ -92,6 +92,14 @@ resource "aws_iam_role" "bedrock_scoped" {
       Effect    = "Allow"
       Principal = { AWS = aws_iam_role.lambda_exec.arn }
       Action    = ["sts:AssumeRole", "sts:TagSession"]
+      # Both tags must be present in the assume-role call (defense-in-depth).
+      # Permissions policy enforces they're non-null at request time too.
+      Condition = {
+        Null = {
+          "aws:RequestTag/department"      = "false"
+          "aws:RequestTag/clearance_level" = "false"
+        }
+      }
     }]
   })
 }
