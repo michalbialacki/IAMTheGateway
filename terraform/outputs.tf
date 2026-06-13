@@ -99,3 +99,28 @@ output "chat_endpoint" {
   description = "Full URL for POST /chat"
   value       = "${aws_api_gateway_stage.prod.invoke_url}/chat"
 }
+
+output "knowledge_base_id" {
+  description = "Bedrock Knowledge Base ID"
+  value       = aws_bedrockagent_knowledge_base.main.id
+}
+
+output "knowledge_base_arn" {
+  description = "Bedrock Knowledge Base ARN"
+  value       = aws_bedrockagent_knowledge_base.main.arn
+}
+
+output "data_source_id" {
+  description = "Bedrock Knowledge Base Data Source ID"
+  value       = aws_bedrockagent_data_source.kb.data_source_id
+}
+
+output "aoss_collection_arn" {
+  description = "OpenSearch Serverless collection ARN"
+  value       = aws_opensearchserverless_collection.kb.arn
+}
+
+output "aoss_collection_endpoint" {
+  description = "OpenSearch Serverless collection endpoint"
+  value       = aws_opensearchserverless_collection.kb.collection_endpoint
+}

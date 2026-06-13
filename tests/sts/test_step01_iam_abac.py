@@ -184,14 +184,16 @@ class TestHandlerSuccess:
     # Patch _get_sts for STS and _invoke_bedrock to avoid real AWS calls.
 
     def _run(self, monkeypatch, event=None, **event_kwargs):
-        monkeypatch.setenv("BEDROCK_ROLE_ARN", FAKE_ROLE_ARN)
-        monkeypatch.setenv("BEDROCK_MODEL_ID", "amazon.titan-text-express-v1")
-        monkeypatch.setenv("AWS_REGION", "eu-central-1")
+        monkeypatch.setenv("BEDROCK_ROLE_ARN",     FAKE_ROLE_ARN)
+        monkeypatch.setenv("BEDROCK_MODEL_ID",     "amazon.titan-text-express-v1")
+        monkeypatch.setenv("BEDROCK_KB_MODEL_ARN", "arn:aws:bedrock:eu-central-1::foundation-model/amazon.titan-text-express-v1")
+        monkeypatch.setenv("KNOWLEDGE_BASE_ID",    "test-kb-id-s01")
+        monkeypatch.setenv("AWS_REGION",           "eu-central-1")
         sts_mock = MagicMock()
         sts_mock.assume_role.return_value = _fake_sts_response()
         mod = _import_handler()
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="ok"):
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
             return mod.lambda_handler(event or _event(**event_kwargs), None), sts_mock
 
     def test_returns_200(self, monkeypatch):

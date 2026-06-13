@@ -100,14 +100,16 @@ def _event(
 
 
 def _env(monkeypatch):
-    monkeypatch.setenv("BEDROCK_ROLE_ARN", FAKE_ROLE_ARN)
-    monkeypatch.setenv("BEDROCK_MODEL_ID", FAKE_MODEL_ID)
-    monkeypatch.setenv("AWS_REGION", REGION)
+    monkeypatch.setenv("BEDROCK_ROLE_ARN",    FAKE_ROLE_ARN)
+    monkeypatch.setenv("BEDROCK_MODEL_ID",    FAKE_MODEL_ID)
+    monkeypatch.setenv("BEDROCK_KB_MODEL_ARN", f"arn:aws:bedrock:{REGION}::foundation-model/{FAKE_MODEL_ID}")
+    monkeypatch.setenv("KNOWLEDGE_BASE_ID",   "test-kb-id-scope-isolation")
+    monkeypatch.setenv("AWS_REGION",          REGION)
 
 
 def _run_handler(mod, event, sts_mock):
     with patch.object(mod, "_get_sts", return_value=sts_mock), \
-         patch.object(mod, "_invoke_bedrock", return_value="ok"):
+         patch.object(mod, "_retrieve_and_generate", return_value="ok"):
         return mod.lambda_handler(event, None)
 
 
@@ -225,7 +227,7 @@ class TestCacheSafetyIsolation:
         mod = _import_handler()
 
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="ok"):
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
             mod.lambda_handler(_event(user_id="alice", clearance_level="1"), None)
             mod.lambda_handler(_event(user_id="alice", clearance_level="3"), None)
 
@@ -240,7 +242,7 @@ class TestCacheSafetyIsolation:
         mod = _import_handler()
 
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="ok"):
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
             mod.lambda_handler(_event(user_id="bob", clearance_level="2"), None)
             mod.lambda_handler(_event(user_id="bob", clearance_level="2"), None)
 
@@ -254,7 +256,7 @@ class TestCacheSafetyIsolation:
         mod = _import_handler()
 
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="ok"):
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
             mod.lambda_handler(_event(user_id="alice", clearance_level="2"), None)
             mod.lambda_handler(_event(user_id="bob", clearance_level="2"), None)
 

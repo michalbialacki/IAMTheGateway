@@ -77,9 +77,11 @@ def _make_event(
 
 
 def _env(monkeypatch) -> None:
-    monkeypatch.setenv("BEDROCK_ROLE_ARN", FAKE_ROLE_ARN)
-    monkeypatch.setenv("BEDROCK_MODEL_ID", FAKE_MODEL_ID)
-    monkeypatch.setenv("AWS_REGION", REGION)
+    monkeypatch.setenv("BEDROCK_ROLE_ARN",     FAKE_ROLE_ARN)
+    monkeypatch.setenv("BEDROCK_MODEL_ID",     FAKE_MODEL_ID)
+    monkeypatch.setenv("BEDROCK_KB_MODEL_ARN", f"arn:aws:bedrock:{REGION}::foundation-model/{FAKE_MODEL_ID}")
+    monkeypatch.setenv("KNOWLEDGE_BASE_ID",    "test-kb-id-s02")
+    monkeypatch.setenv("AWS_REGION",           REGION)
 
 
 def _run(monkeypatch, message: str, captured: list | None = None) -> dict:
@@ -89,13 +91,13 @@ def _run(monkeypatch, message: str, captured: list | None = None) -> dict:
     sts_mock.assume_role.return_value = _fake_sts_response()
     mod = _import_handler()
 
-    def fake_invoke(msg, creds, policy=None):
+    def fake_invoke(msg, creds, policy, metadata_filter):
         if captured is not None:
             captured.append(msg)
         return "mocked response"
 
     with patch.object(mod, "_get_sts", return_value=sts_mock), \
-         patch.object(mod, "_invoke_bedrock", side_effect=fake_invoke):
+         patch.object(mod, "_retrieve_and_generate", side_effect=fake_invoke):
         return mod.lambda_handler(_make_event(message), None)
 
 

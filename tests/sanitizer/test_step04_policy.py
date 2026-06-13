@@ -74,46 +74,46 @@ def _make_event(
 
 
 def _run(monkeypatch, message: str, clearance: str = "2", department: str = "engineering") -> tuple[dict, list]:
-    monkeypatch.setenv("BEDROCK_ROLE_ARN", FAKE_ROLE_ARN)
-    monkeypatch.setenv("BEDROCK_MODEL_ID", FAKE_MODEL_ID)
-    monkeypatch.setenv("AWS_REGION", REGION)
+    monkeypatch.setenv("BEDROCK_ROLE_ARN",     FAKE_ROLE_ARN)
+    monkeypatch.setenv("BEDROCK_MODEL_ID",     FAKE_MODEL_ID)
+    monkeypatch.setenv("BEDROCK_KB_MODEL_ARN", f"arn:aws:bedrock:{REGION}::foundation-model/{FAKE_MODEL_ID}")
+    monkeypatch.setenv("KNOWLEDGE_BASE_ID",    "test-kb-id-s04")
+    monkeypatch.setenv("AWS_REGION",           REGION)
 
     sts_mock = MagicMock()
     sts_mock.assume_role.return_value = _fake_sts_response()
     mod = _import_handler()
     captured_bodies: list[dict] = []
 
-    def fake_invoke(msg, creds, policy=None):
+    def fake_invoke(msg, creds, policy, metadata_filter):
         captured_bodies.append({"message": msg})
         return "mocked"
 
     with patch.object(mod, "_get_sts", return_value=sts_mock), \
-         patch.object(mod, "_invoke_bedrock", side_effect=fake_invoke):
+         patch.object(mod, "_retrieve_and_generate", side_effect=fake_invoke):
         resp = mod.lambda_handler(_make_event(message, clearance=clearance, department=department), None)
 
     return resp, captured_bodies
 
 
 def _run_real_bedrock_mock(monkeypatch, message: str, clearance: str = "2") -> tuple[dict, dict]:
-    """Run handler with a real boto3 bedrock mock to capture textGenerationConfig."""
-    monkeypatch.setenv("BEDROCK_ROLE_ARN", FAKE_ROLE_ARN)
-    monkeypatch.setenv("BEDROCK_MODEL_ID", FAKE_MODEL_ID)
-    monkeypatch.setenv("AWS_REGION", REGION)
+    """Run handler with a real boto3 bedrock-agent-runtime mock to capture generation config."""
+    monkeypatch.setenv("BEDROCK_ROLE_ARN",     FAKE_ROLE_ARN)
+    monkeypatch.setenv("BEDROCK_MODEL_ID",     FAKE_MODEL_ID)
+    monkeypatch.setenv("BEDROCK_KB_MODEL_ARN", f"arn:aws:bedrock:{REGION}::foundation-model/{FAKE_MODEL_ID}")
+    monkeypatch.setenv("KNOWLEDGE_BASE_ID",    "test-kb-id-s04-real")
+    monkeypatch.setenv("AWS_REGION",           REGION)
 
     sts_mock = MagicMock()
     sts_mock.assume_role.return_value = _fake_sts_response()
 
     bedrock_mock = MagicMock()
-    body_stream = MagicMock()
-    body_stream.read.return_value = json.dumps({
-        "results": [{"outputText": "ok", "completionReason": "FINISH"}]
-    }).encode()
-    bedrock_mock.invoke_model.return_value = {"body": body_stream}
+    bedrock_mock.retrieve_and_generate.return_value = {"output": {"text": "ok"}}
 
     mod = _import_handler()
 
     def boto3_factory(service_name, **kwargs):
-        if service_name == "bedrock-runtime":
+        if service_name == "bedrock-agent-runtime":
             return bedrock_mock
         raise ValueError(service_name)
 
@@ -121,10 +121,12 @@ def _run_real_bedrock_mock(monkeypatch, message: str, clearance: str = "2") -> t
          patch("boto3.client", side_effect=boto3_factory):
         resp = mod.lambda_handler(_make_event(message, clearance=clearance), None)
 
-    call_body = {}
-    if bedrock_mock.invoke_model.called:
-        call_body = json.loads(bedrock_mock.invoke_model.call_args[1]["body"])
-    return resp, call_body
+    text_cfg: dict = {}
+    if bedrock_mock.retrieve_and_generate.called:
+        call_kwargs = bedrock_mock.retrieve_and_generate.call_args[1]
+        kb_conf     = call_kwargs["retrieveAndGenerateConfiguration"]["knowledgeBaseConfiguration"]
+        text_cfg    = kb_conf["generationConfiguration"]["inferenceConfig"]["textInferenceConfig"]
+    return resp, text_cfg
 
 
 # ─── Unit: ClearancePolicy and get_policy ────────────────────────────────────
@@ -223,30 +225,30 @@ class TestTopicRestriction:
 
 class TestHandlerPolicyIntegration:
     def test_clearance_0_sends_256_max_tokens(self, monkeypatch):
-        resp, body = _run_real_bedrock_mock(monkeypatch, "What is the company policy?", "0")
+        resp, cfg = _run_real_bedrock_mock(monkeypatch, "What is the company policy?", "0")
         assert resp["statusCode"] == 200
-        assert body["textGenerationConfig"]["maxTokenCount"] == 256
+        assert cfg["maxTokens"] == 256
 
     def test_clearance_2_sends_1024_max_tokens(self, monkeypatch):
-        _, body = _run_real_bedrock_mock(monkeypatch, "Any question here.", "2")
-        assert body["textGenerationConfig"]["maxTokenCount"] == 1024
+        _, cfg = _run_real_bedrock_mock(monkeypatch, "Any question here.", "2")
+        assert cfg["maxTokens"] == 1024
 
     def test_clearance_4_sends_4096_max_tokens(self, monkeypatch):
-        _, body = _run_real_bedrock_mock(monkeypatch, "Any question here.", "4")
-        assert body["textGenerationConfig"]["maxTokenCount"] == 4096
+        _, cfg = _run_real_bedrock_mock(monkeypatch, "Any question here.", "4")
+        assert cfg["maxTokens"] == 4096
 
     def test_clearance_0_sends_temperature_03(self, monkeypatch):
-        _, body = _run_real_bedrock_mock(monkeypatch, "What is the company policy?", "0")
-        assert abs(body["textGenerationConfig"]["temperature"] - 0.3) < 0.01
+        _, cfg = _run_real_bedrock_mock(monkeypatch, "What is the company policy?", "0")
+        assert abs(cfg["temperature"] - 0.3) < 0.01
 
     def test_clearance_4_sends_temperature_09(self, monkeypatch):
-        _, body = _run_real_bedrock_mock(monkeypatch, "Any question.", "4")
-        assert abs(body["textGenerationConfig"]["temperature"] - 0.9) < 0.01
+        _, cfg = _run_real_bedrock_mock(monkeypatch, "Any question.", "4")
+        assert abs(cfg["temperature"] - 0.9) < 0.01
 
     def test_higher_clearance_gets_more_tokens(self, monkeypatch):
-        _, body0 = _run_real_bedrock_mock(monkeypatch, "What is the company policy?", "0")
-        _, body4 = _run_real_bedrock_mock(monkeypatch, "Any question.", "4")
-        assert body4["textGenerationConfig"]["maxTokenCount"] > body0["textGenerationConfig"]["maxTokenCount"]
+        _, cfg0 = _run_real_bedrock_mock(monkeypatch, "What is the company policy?", "0")
+        _, cfg4 = _run_real_bedrock_mock(monkeypatch, "Any question.", "4")
+        assert cfg4["maxTokens"] > cfg0["maxTokens"]
 
 
 # ─── Integration: topic gate in handler ──────────────────────────────────────

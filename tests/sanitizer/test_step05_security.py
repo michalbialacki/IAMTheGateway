@@ -62,20 +62,22 @@ def _event(message: str, clearance: str = "2", department: str = "engineering") 
 
 
 def _run(message: str, monkeypatch, clearance: str = "2", department: str = "engineering") -> tuple[dict, list[str]]:
-    monkeypatch.setenv("BEDROCK_ROLE_ARN", FAKE_ROLE_ARN)
-    monkeypatch.setenv("BEDROCK_MODEL_ID", FAKE_MODEL_ID)
-    monkeypatch.setenv("AWS_REGION", REGION)
+    monkeypatch.setenv("BEDROCK_ROLE_ARN",     FAKE_ROLE_ARN)
+    monkeypatch.setenv("BEDROCK_MODEL_ID",     FAKE_MODEL_ID)
+    monkeypatch.setenv("BEDROCK_KB_MODEL_ARN", f"arn:aws:bedrock:{REGION}::foundation-model/{FAKE_MODEL_ID}")
+    monkeypatch.setenv("KNOWLEDGE_BASE_ID",    "test-kb-id-s05")
+    monkeypatch.setenv("AWS_REGION",           REGION)
 
     mod = _import_handler()
     sts_mock = _fake_sts()
     bedrock_calls: list[str] = []
 
-    def fake_invoke(msg, creds, policy=None):
+    def fake_invoke(msg, creds, policy, metadata_filter):
         bedrock_calls.append(msg)
         return "mock response"
 
     with patch.object(mod, "_get_sts", return_value=sts_mock), \
-         patch.object(mod, "_invoke_bedrock", side_effect=fake_invoke):
+         patch.object(mod, "_retrieve_and_generate", side_effect=fake_invoke):
         resp = mod.lambda_handler(_event(message, clearance=clearance, department=department), None)
 
     return resp, bedrock_calls

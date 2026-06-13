@@ -35,10 +35,29 @@ _CLOSING_TMPL = (
 )
 
 
-def build_sandwich_prompt(message: str, department: str, clearance_level: int) -> str:
-    """Return a sandwich-wrapped prompt: opening + user message + closing reminder."""
+def _format_history(history: list[dict]) -> str:
+    lines = ["[CONVERSATION HISTORY]"]
+    for i, turn in enumerate(history, start=1):
+        lines.append(f"Turn {i}:")
+        lines.append(f"User: {turn['user_msg']}")
+        lines.append(f"Assistant: {turn['assistant_msg']}")
+    return "\n".join(lines)
+
+
+def build_sandwich_prompt(
+    message: str,
+    department: str,
+    clearance_level: int,
+    history: list[dict] | None = None,
+) -> str:
+    """Return a sandwich-wrapped prompt: opening [+ history] + user message + closing."""
     label = _CLEARANCE_LABELS.get(clearance_level, f"Level {clearance_level}")
     ctx = {"department": department, "level": clearance_level, "label": label}
     opening = _OPENING_TMPL.format(**ctx)
     closing = _CLOSING_TMPL.format(**ctx)
-    return f"{opening}\n\n[USER] {message}\n\n{closing}"
+    parts = [opening]
+    if history:
+        parts.append(_format_history(history))
+    parts.append(f"[USER] {message}")
+    parts.append(closing)
+    return "\n\n".join(parts)

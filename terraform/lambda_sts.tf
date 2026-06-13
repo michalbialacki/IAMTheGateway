@@ -45,8 +45,11 @@ resource "aws_lambda_function" "sts_session" {
 
   environment {
     variables = {
-      BEDROCK_ROLE_ARN = aws_iam_role.bedrock_scoped.arn
-      BEDROCK_MODEL_ID = var.bedrock_model_id
+      BEDROCK_ROLE_ARN     = aws_iam_role.bedrock_scoped.arn
+      BEDROCK_MODEL_ID     = var.bedrock_model_id
+      BEDROCK_KB_MODEL_ARN = "arn:aws:bedrock:${local.region}::foundation-model/${var.bedrock_model_id}"
+      KNOWLEDGE_BASE_ID    = aws_bedrockagent_knowledge_base.main.id
+      CONVERSATION_TABLE   = aws_dynamodb_table.conversation_history.name
     }
   }
 }

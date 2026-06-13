@@ -79,20 +79,28 @@ def _event(
 
 class TestCacheKey:
     def test_key_contains_user_id(self):
-        key = _import_handler()._cache_key("u-123", 2)
+        key = _import_handler()._cache_key("u-123", "engineering", 2)
         assert "u-123" in key
 
     def test_key_contains_clearance(self):
-        key = _import_handler()._cache_key("u-123", 3)
+        key = _import_handler()._cache_key("u-123", "engineering", 3)
         assert "3" in key
+
+    def test_key_contains_department(self):
+        key = _import_handler()._cache_key("u-123", "finance", 2)
+        assert "finance" in key
 
     def test_different_clearance_different_key(self):
         mod = _import_handler()
-        assert mod._cache_key("u-1", 1) != mod._cache_key("u-1", 2)
+        assert mod._cache_key("u-1", "engineering", 1) != mod._cache_key("u-1", "engineering", 2)
 
     def test_different_user_different_key(self):
         mod = _import_handler()
-        assert mod._cache_key("u-1", 1) != mod._cache_key("u-2", 1)
+        assert mod._cache_key("u-1", "engineering", 1) != mod._cache_key("u-2", "engineering", 1)
+
+    def test_different_department_different_key(self):
+        mod = _import_handler()
+        assert mod._cache_key("u-1", "engineering", 2) != mod._cache_key("u-1", "finance", 2)
 
 
 # ─── Unit: _get_cached / _put_cached ─────────────────────────────────────────
@@ -101,37 +109,37 @@ class TestCacheKey:
 class TestCacheHelpers:
     def test_miss_on_empty_cache(self):
         mod = _import_handler()
-        assert mod._get_cached("u-1", 2) is None
+        assert mod._get_cached("u-1", "engineering", 2) is None
 
     def test_hit_after_put(self):
         mod = _import_handler()
         creds = {"AccessKeyId": "AK1", "SecretAccessKey": "SK1",
                  "SessionToken": "ST1", "Expiration": "2099-01-01T00:00:00+00:00"}
-        mod._put_cached("u-1", 2, creds, _fresh_expiry())
-        assert mod._get_cached("u-1", 2) == creds
+        mod._put_cached("u-1", "engineering", 2, creds, _fresh_expiry())
+        assert mod._get_cached("u-1", "engineering", 2) == creds
 
     def test_miss_after_expiry(self):
         mod = _import_handler()
         creds = {"AccessKeyId": "AK1", "SecretAccessKey": "SK1",
                  "SessionToken": "ST1", "Expiration": "2000-01-01T00:00:00+00:00"}
-        mod._put_cached("u-1", 2, creds, _expired_expiry())
-        assert mod._get_cached("u-1", 2) is None
+        mod._put_cached("u-1", "engineering", 2, creds, _expired_expiry())
+        assert mod._get_cached("u-1", "engineering", 2) is None
 
     def test_miss_within_buffer(self):
         """Credentials expiring in <60s are treated as expired."""
         mod = _import_handler()
         creds = {"AccessKeyId": "AK1", "SecretAccessKey": "SK1",
                  "SessionToken": "ST1", "Expiration": "..."}
-        mod._put_cached("u-1", 2, creds, _near_expiry())
-        assert mod._get_cached("u-1", 2) is None
+        mod._put_cached("u-1", "engineering", 2, creds, _near_expiry())
+        assert mod._get_cached("u-1", "engineering", 2) is None
 
     def test_expired_entry_removed_from_cache(self):
         mod = _import_handler()
         creds = {"AccessKeyId": "AK1", "SecretAccessKey": "SK1",
                  "SessionToken": "ST1", "Expiration": "2000-01-01T00:00:00+00:00"}
-        mod._put_cached("u-1", 2, creds, _expired_expiry())
-        mod._get_cached("u-1", 2)  # should delete
-        assert mod._cache_key("u-1", 2) not in mod._sts_cache
+        mod._put_cached("u-1", "engineering", 2, creds, _expired_expiry())
+        mod._get_cached("u-1", "engineering", 2)  # should delete
+        assert mod._cache_key("u-1", "engineering", 2) not in mod._sts_cache
 
     def test_isolation_between_clearance_levels(self):
         mod = _import_handler()
@@ -139,23 +147,37 @@ class TestCacheHelpers:
                      "SessionToken": "ST", "Expiration": "..."}
         creds_cl3 = {"AccessKeyId": "AK3", "SecretAccessKey": "SK",
                      "SessionToken": "ST", "Expiration": "..."}
-        mod._put_cached("u-1", 1, creds_cl1, _fresh_expiry())
-        mod._put_cached("u-1", 3, creds_cl3, _fresh_expiry())
-        assert mod._get_cached("u-1", 1) == creds_cl1
-        assert mod._get_cached("u-1", 3) == creds_cl3
+        mod._put_cached("u-1", "engineering", 1, creds_cl1, _fresh_expiry())
+        mod._put_cached("u-1", "engineering", 3, creds_cl3, _fresh_expiry())
+        assert mod._get_cached("u-1", "engineering", 1) == creds_cl1
+        assert mod._get_cached("u-1", "engineering", 3) == creds_cl3
+
+    def test_isolation_between_departments(self):
+        """Same user, different departments → separate cache slots."""
+        mod = _import_handler()
+        creds_eng = {"AccessKeyId": "AK-ENG", "SecretAccessKey": "SK",
+                     "SessionToken": "ST", "Expiration": "..."}
+        creds_fin = {"AccessKeyId": "AK-FIN", "SecretAccessKey": "SK",
+                     "SessionToken": "ST", "Expiration": "..."}
+        mod._put_cached("u-1", "engineering", 2, creds_eng, _fresh_expiry())
+        mod._put_cached("u-1", "finance", 2, creds_fin, _fresh_expiry())
+        assert mod._get_cached("u-1", "engineering", 2) == creds_eng
+        assert mod._get_cached("u-1", "finance", 2) == creds_fin
 
 
 # ─── Unit: lambda_handler cache behaviour ────────────────────────────────────
 
 
 class TestHandlerCache:
-    # Handler now calls _invoke_bedrock after obtaining credentials.
-    # All handler tests patch _invoke_bedrock to focus on cache behaviour only.
+    # Handler now calls _retrieve_and_generate after obtaining credentials.
+    # All handler tests patch _retrieve_and_generate to focus on cache behaviour only.
 
     def _env(self, monkeypatch):
-        monkeypatch.setenv("BEDROCK_ROLE_ARN", FAKE_ROLE_ARN)
-        monkeypatch.setenv("BEDROCK_MODEL_ID", "amazon.titan-text-express-v1")
-        monkeypatch.setenv("AWS_REGION", "eu-central-1")
+        monkeypatch.setenv("BEDROCK_ROLE_ARN",     FAKE_ROLE_ARN)
+        monkeypatch.setenv("BEDROCK_MODEL_ID",     "amazon.titan-text-express-v1")
+        monkeypatch.setenv("BEDROCK_KB_MODEL_ARN", "arn:aws:bedrock:eu-central-1::foundation-model/amazon.titan-text-express-v1")
+        monkeypatch.setenv("KNOWLEDGE_BASE_ID",    "test-kb-id-cache")
+        monkeypatch.setenv("AWS_REGION",           "eu-central-1")
 
     def test_second_call_hits_cache(self, monkeypatch):
         """Same user + clearance called twice → assume_role called only once."""
@@ -165,7 +187,7 @@ class TestHandlerCache:
 
         mod = _import_handler()
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="ok"):
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
             mod.lambda_handler(_event(), None)
             mod.lambda_handler(_event(), None)
 
@@ -179,7 +201,7 @@ class TestHandlerCache:
 
         mod = _import_handler()
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="ok"):
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
             mod.lambda_handler(_event(user_id="alice"), None)
             mod.lambda_handler(_event(user_id="bob"), None)
 
@@ -193,7 +215,7 @@ class TestHandlerCache:
 
         mod = _import_handler()
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="ok"):
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
             mod.lambda_handler(_event(clearance_level="1"), None)
             mod.lambda_handler(_event(clearance_level="3"), None)
 
@@ -206,11 +228,11 @@ class TestHandlerCache:
         mod = _import_handler()
         stale = {"AccessKeyId": "OLD", "SecretAccessKey": "SK",
                  "SessionToken": "ST", "Expiration": "2000-01-01T00:00:00+00:00"}
-        mod._put_cached("user-abc", 2, stale, _expired_expiry())
+        mod._put_cached("user-abc", "engineering", 2, stale, _expired_expiry())
 
         sts_mock.assume_role.return_value = _sts_response(_fresh_expiry())
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="ok"):
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
             mod.lambda_handler(_event(), None)
 
         assert sts_mock.assume_role.call_count == 1
@@ -222,11 +244,11 @@ class TestHandlerCache:
         mod = _import_handler()
         stale = {"AccessKeyId": "OLD", "SecretAccessKey": "SK",
                  "SessionToken": "ST", "Expiration": "..."}
-        mod._put_cached("user-abc", 2, stale, _near_expiry())
+        mod._put_cached("user-abc", "engineering", 2, stale, _near_expiry())
 
         sts_mock.assume_role.return_value = _sts_response(_fresh_expiry())
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="ok"):
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
             mod.lambda_handler(_event(), None)
 
         assert sts_mock.assume_role.call_count == 1
@@ -240,7 +262,7 @@ class TestHandlerCache:
         import json as _json
         mod = _import_handler()
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="hello"):
+             patch.object(mod, "_retrieve_and_generate", return_value="hello"):
             r1 = _json.loads(mod.lambda_handler(_event(), None)["body"])
             r2 = _json.loads(mod.lambda_handler(_event(), None)["body"])
 
@@ -255,7 +277,78 @@ class TestHandlerCache:
 
         mod = _import_handler()
         with patch.object(mod, "_get_sts", return_value=sts_mock), \
-             patch.object(mod, "_invoke_bedrock", return_value="ok"):
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
             mod.lambda_handler(_event(user_id="u-xyz", clearance_level="1"), None)
 
-        assert mod._get_cached("u-xyz", 1) is not None
+        assert mod._get_cached("u-xyz", "engineering", 1) is not None
+
+
+class TestDepartmentEviction:
+    """Department change must evict stale credentials immediately."""
+
+    def _env(self, monkeypatch):
+        monkeypatch.setenv("BEDROCK_ROLE_ARN",     FAKE_ROLE_ARN)
+        monkeypatch.setenv("BEDROCK_MODEL_ID",     "amazon.titan-text-express-v1")
+        monkeypatch.setenv("BEDROCK_KB_MODEL_ARN", "arn:aws:bedrock:eu-central-1::foundation-model/amazon.titan-text-express-v1")
+        monkeypatch.setenv("KNOWLEDGE_BASE_ID",    "test-kb-id-eviction")
+        monkeypatch.setenv("AWS_REGION",           "eu-central-1")
+
+    def test_department_change_triggers_new_assume_role(self, monkeypatch):
+        """Same user moves from engineering → finance; old cache must not be served."""
+        self._env(monkeypatch)
+        sts_mock = MagicMock()
+        sts_mock.assume_role.return_value = _sts_response(_fresh_expiry())
+
+        mod = _import_handler()
+        with patch.object(mod, "_get_sts", return_value=sts_mock), \
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
+            mod.lambda_handler(_event(department="engineering"), None)
+            mod.lambda_handler(_event(department="finance"), None)
+
+        assert sts_mock.assume_role.call_count == 2
+
+    def test_department_change_evicts_old_entry(self, monkeypatch):
+        """After dept change, the old engineering entry is removed from cache."""
+        self._env(monkeypatch)
+        sts_mock = MagicMock()
+        sts_mock.assume_role.return_value = _sts_response(_fresh_expiry())
+
+        mod = _import_handler()
+        with patch.object(mod, "_get_sts", return_value=sts_mock), \
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
+            mod.lambda_handler(_event(department="engineering"), None)
+            # Verify entry exists before dept change
+            assert mod._get_cached("user-abc", "engineering", 2) is not None
+            mod.lambda_handler(_event(department="finance"), None)
+
+        # Old engineering entry must be gone
+        assert mod._get_cached("user-abc", "engineering", 2) is None
+
+    def test_same_department_does_not_evict(self, monkeypatch):
+        """Two calls with same department → cache hit, no eviction."""
+        self._env(monkeypatch)
+        sts_mock = MagicMock()
+        sts_mock.assume_role.return_value = _sts_response(_fresh_expiry())
+
+        mod = _import_handler()
+        with patch.object(mod, "_get_sts", return_value=sts_mock), \
+             patch.object(mod, "_retrieve_and_generate", return_value="ok"):
+            mod.lambda_handler(_event(department="engineering"), None)
+            mod.lambda_handler(_event(department="engineering"), None)
+
+        assert sts_mock.assume_role.call_count == 1
+
+    def test_evict_user_removes_all_clearance_entries(self):
+        """_evict_user removes all clearance-level entries for that user."""
+        mod = _import_handler()
+        creds = {"AccessKeyId": "AK", "SecretAccessKey": "SK",
+                 "SessionToken": "ST", "Expiration": "..."}
+        mod._put_cached("u-1", "engineering", 1, creds, _fresh_expiry())
+        mod._put_cached("u-1", "engineering", 3, creds, _fresh_expiry())
+        mod._put_cached("u-2", "engineering", 2, creds, _fresh_expiry())
+
+        mod._evict_user("u-1")
+
+        assert mod._get_cached("u-1", "engineering", 1) is None
+        assert mod._get_cached("u-1", "engineering", 3) is None
+        assert mod._get_cached("u-2", "engineering", 2) is not None  # other user untouched

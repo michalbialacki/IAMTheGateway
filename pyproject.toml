@@ -3,13 +3,20 @@ name = "iam-gateway"
 version = "0.1.0"
 description = "Multitenant GenAI Gateway with IAM and ABAC isolation"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "keyring>=25.0.0",
+    "opensearch-py>=3.2.0",
+    "requests>=2.32.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "integration: requires live AWS credentials (deselect with -m 'not integration')",
+]
 
 [tool.ruff]
 line-length = 100
