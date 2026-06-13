@@ -17,8 +17,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from botocore.exceptions import ClientError
-
 from sanitizer.policy import get_policy
 
 _HANDLER_PATH = Path(__file__).resolve().parents[2] / "lambda" / "sts" / "handler.py"
@@ -43,6 +41,13 @@ def _load_handler():
     spec = importlib.util.spec_from_file_location("sts_handler", _HANDLER_PATH)
     mod  = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    # Offline tier: stub out DynamoDB conversation persistence (Phase 06).
+    # These tests exercise the STS / sanitize / KB paths, not history;
+    # persistence is covered in tests/conversation/. Without this stub,
+    # _save_exchange() raises KeyError('CONVERSATION_TABLE') when the full
+    # lambda_handler is invoked offline.
+    mod._save_exchange = lambda *args, **kwargs: None
+    mod._load_history = lambda *args, **kwargs: []
     return mod
 
 

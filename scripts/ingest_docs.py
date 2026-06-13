@@ -1,7 +1,11 @@
 """Upload test documents to S3 and trigger Bedrock KB sync.
 
-Uploads 8 documents (2 departments × 4 clearance levels) plus their sidecar
+Uploads 15 documents (3 departments × 5 clearance levels) plus their sidecar
 .metadata.json files, then starts a Bedrock Knowledge Base ingestion job.
+
+Departments align with the Cognito test users (scripts/create_test_users.py):
+engineering, legal, security — so a logged-in user's metadataFilter actually
+matches real documents in the Knowledge Base.
 
 Usage:
     uv run python scripts/ingest_docs.py
@@ -23,9 +27,15 @@ TF_BIN    = (
     "Hashicorp.Terraform_Microsoft.Winget.Source_8wekyb3d8bbwe/terraform.exe"
 )
 
-DEPARTMENTS     = ["alpha", "bravo"]
-CLEARANCE_LEVELS = [0, 1, 2, 3]
-CL_LABELS       = {0: "unclassified", 1: "classified", 2: "restricted", 3: "secret"}
+DEPARTMENTS     = ["engineering", "legal", "security"]
+CLEARANCE_LEVELS = [0, 1, 2, 3, 4]
+CL_LABELS       = {
+    0: "unclassified",
+    1: "classified",
+    2: "restricted",
+    3: "secret",
+    4: "top_secret",
+}
 DOC_PREFIX      = "docs"
 
 

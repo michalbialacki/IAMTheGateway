@@ -81,12 +81,14 @@ def test_main_fmt_clean():
 
 # ─── post-apply: sessions table ──────────────────────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_sessions_table_exists():
     table = _get_table(SESSIONS_TABLE)
     assert table["TableStatus"] == "ACTIVE"
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_sessions_table_key_schema():
     table = _get_table(SESSIONS_TABLE)
@@ -94,6 +96,7 @@ def test_sessions_table_key_schema():
     assert keys == {"session_id": "HASH"}
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_sessions_table_ttl_enabled():
     import boto3
@@ -105,6 +108,7 @@ def test_sessions_table_ttl_enabled():
     assert ttl["AttributeName"] == "expires_at"
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_sessions_table_has_user_id_gsi():
     table = _get_table(SESSIONS_TABLE)
@@ -112,6 +116,7 @@ def test_sessions_table_has_user_id_gsi():
     assert "user_id-index" in gsi_names
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_sessions_table_sse_enabled():
     table = _get_table(SESSIONS_TABLE)
@@ -120,12 +125,14 @@ def test_sessions_table_sse_enabled():
 
 # ─── post-apply: conversation_history table ───────────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_history_table_exists():
     table = _get_table(HISTORY_TABLE)
     assert table["TableStatus"] == "ACTIVE"
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_history_table_key_schema():
     table = _get_table(HISTORY_TABLE)
@@ -133,6 +140,7 @@ def test_history_table_key_schema():
     assert keys == {"session_id": "HASH", "turn_index": "RANGE"}
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_history_table_ttl_enabled():
     import boto3
@@ -146,12 +154,14 @@ def test_history_table_ttl_enabled():
 
 # ─── post-apply: revoked_tokens table ────────────────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_revoked_tokens_table_exists():
     table = _get_table(REVOKED_TABLE)
     assert table["TableStatus"] == "ACTIVE"
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_revoked_tokens_table_key_schema():
     table = _get_table(REVOKED_TABLE)
@@ -159,6 +169,7 @@ def test_revoked_tokens_table_key_schema():
     assert keys == {"jti": "HASH"}
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_revoked_tokens_ttl_enabled():
     import boto3

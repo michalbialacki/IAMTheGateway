@@ -84,6 +84,7 @@ def test_main_fmt_clean():
 
 # ─── post-apply: user pool ────────────────────────────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_user_pool_exists():
     import boto3
@@ -93,6 +94,7 @@ def test_user_pool_exists():
     assert pool["Id"] == pool_id
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_user_pool_admin_only_signup():
     import boto3
@@ -102,6 +104,7 @@ def test_user_pool_admin_only_signup():
     assert pool["AdminCreateUserConfig"]["AllowAdminCreateUserOnly"] is True
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_user_pool_email_as_username():
     import boto3
@@ -113,6 +116,7 @@ def test_user_pool_email_as_username():
 
 # ─── post-apply: app client ───────────────────────────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_app_client_has_no_secret():
     import boto3
@@ -125,6 +129,7 @@ def test_app_client_has_no_secret():
     assert "ClientSecret" not in client or not client.get("ClientSecret")
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_app_client_allows_password_auth():
     import boto3
@@ -141,6 +146,7 @@ def test_app_client_allows_password_auth():
 
 # ─── post-apply: ABAC groups ─────────────────────────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_all_abac_groups_exist():
     import boto3
@@ -157,6 +163,7 @@ def test_all_abac_groups_exist():
     assert not missing, f"Missing groups: {sorted(missing)}"
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_abac_group_count():
     import boto3

@@ -61,6 +61,13 @@ def _import_handler():
     spec = importlib.util.spec_from_file_location("sts_handler", _HANDLER_PATH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    # Offline tier: stub out DynamoDB conversation persistence (Phase 06).
+    # These tests exercise the STS / sanitize / KB paths, not history;
+    # persistence is covered in tests/conversation/. Without this stub,
+    # _save_exchange() raises KeyError('CONVERSATION_TABLE') when the full
+    # lambda_handler is invoked offline.
+    mod._save_exchange = lambda *args, **kwargs: None
+    mod._load_history = lambda *args, **kwargs: []
     return mod
 
 
@@ -213,6 +220,7 @@ def test_terraform_fmt_clean():
 # ─── Post-apply: /chat integration is Lambda proxy ───────────────────────────
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_chat_integration_type_is_lambda_proxy():
     import boto3
@@ -230,6 +238,7 @@ def test_chat_integration_type_is_lambda_proxy():
     assert integration["type"] == "AWS_PROXY"
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_chat_integration_uri_contains_sts_lambda():
     import boto3

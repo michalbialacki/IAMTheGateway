@@ -5,7 +5,7 @@ Unit tests (no AWS):
   - s3_key_for_doc / s3_key_for_metadata: key format and naming convention
   - all_document_pairs: full matrix coverage, no duplicates
 
-Integration tests (require live AWS, marked @pytest.mark.integration):
+Integration tests (require AOSS ACTIVE + Bedrock KB sync, marked @pytest.mark.aoss):
   - All 8 document .txt keys exist in S3
   - All 8 sidecar .metadata.json keys exist in S3
   - Metadata content matches expected department / clearance_level per document
@@ -183,7 +183,7 @@ def aws_context():
     }
 
 
-@pytest.mark.integration
+@pytest.mark.aoss
 class TestS3State:
     """Verify S3 state after ingest_docs.py has been run."""
 
@@ -240,7 +240,7 @@ class TestS3State:
             )
 
 
-@pytest.mark.integration
+@pytest.mark.aoss
 class TestIngestionJob:
     """Verify that at least one ingestion job reached COMPLETE state."""
 

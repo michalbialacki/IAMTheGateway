@@ -10,7 +10,7 @@ Prerequisites:
   4. Bedrock model access enabled in console (Titan Embeddings V2 + Titan Text Express v1)
 
 Run:
-    uv run pytest -m integration tests/cli/test_step06_integration.py -v
+    uv run pytest -m aoss tests/cli/test_step06_integration.py -v
 
 Required env vars:
     CHAT_API_URL              Full /chat endpoint (terraform output chat_endpoint)
@@ -19,8 +19,8 @@ Required env vars:
     AWS_REGION                AWS region (default: eu-central-1)
     INT_TEST_USER_ENG         Cognito username – engineering dept, clearance >= 2
     INT_TEST_PASS_ENG         Password for INT_TEST_USER_ENG
-    INT_TEST_USER_FIN         Cognito username – finance dept, clearance >= 1
-    INT_TEST_PASS_FIN         Password for INT_TEST_USER_FIN
+    INT_TEST_USER_LEGAL       Cognito username – legal dept (e.g. bob@test.local)
+    INT_TEST_PASS_LEGAL       Password for INT_TEST_USER_LEGAL
 """
 
 import os
@@ -31,7 +31,7 @@ from cli.auth import AuthError, AuthTokens, CognitoConfig, login
 from cli.gateway import ChatResponse, GatewayError, send_message
 from cli.scan import client_scan, format_scan_warning
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.aoss
 
 # ─── Helpers & fixtures ───────────────────────────────────────────────────────
 
@@ -65,9 +65,9 @@ def eng_tokens(cognito_config) -> AuthTokens:
 
 
 @pytest.fixture(scope="module")
-def fin_tokens(cognito_config) -> AuthTokens:
-    username = _require_env("INT_TEST_USER_FIN")
-    password = _require_env("INT_TEST_PASS_FIN")
+def legal_tokens(cognito_config) -> AuthTokens:
+    username = _require_env("INT_TEST_USER_LEGAL")
+    password = _require_env("INT_TEST_PASS_LEGAL")
     return login(username, password, cognito_config)
 
 
@@ -77,6 +77,7 @@ def fin_tokens(cognito_config) -> AuthTokens:
 def test_login_returns_auth_tokens(eng_tokens):
     assert isinstance(eng_tokens, AuthTokens)
     assert eng_tokens.id_token
+    assert eng_tokens.access_token  # the token actually sent to API Gateway
     assert eng_tokens.refresh_token
     assert eng_tokens.expires_in > 0
 
@@ -102,7 +103,7 @@ def test_login_fails_with_wrong_username(cognito_config):
 def test_engineering_user_gets_chat_response(eng_tokens, api_url):
     resp = send_message(
         message="What is the current security status summary?",
-        id_token=eng_tokens.id_token,
+        access_token=eng_tokens.access_token,
         api_url=api_url,
     )
     assert isinstance(resp, ChatResponse)
@@ -114,7 +115,7 @@ def test_engineering_user_gets_chat_response(eng_tokens, api_url):
 def test_chat_response_has_all_fields(eng_tokens, api_url):
     resp = send_message(
         message="Summarize the threat assessment.",
-        id_token=eng_tokens.id_token,
+        access_token=eng_tokens.access_token,
         api_url=api_url,
     )
     assert resp.session_id
@@ -131,14 +132,14 @@ def test_chat_response_has_all_fields(eng_tokens, api_url):
 def test_session_id_reused_across_turns(eng_tokens, api_url):
     resp1 = send_message(
         message="What is the Q2 security report about?",
-        id_token=eng_tokens.id_token,
+        access_token=eng_tokens.access_token,
         api_url=api_url,
     )
     session_id = resp1.session_id
 
     resp2 = send_message(
         message="Can you give me more details about that?",
-        id_token=eng_tokens.id_token,
+        access_token=eng_tokens.access_token,
         api_url=api_url,
         session_id=session_id,
     )
@@ -148,29 +149,29 @@ def test_session_id_reused_across_turns(eng_tokens, api_url):
 def test_new_session_gets_different_id(eng_tokens, api_url):
     resp1 = send_message(
         message="First session question.",
-        id_token=eng_tokens.id_token,
+        access_token=eng_tokens.access_token,
         api_url=api_url,
     )
     resp2 = send_message(
         message="Second session question.",
-        id_token=eng_tokens.id_token,
+        access_token=eng_tokens.access_token,
         api_url=api_url,
         # No session_id — server generates a new one
     )
     assert resp1.session_id != resp2.session_id
 
 
-# ─── Finance user ────────────────────────────────────────────────────────────
+# ─── Legal user (different department → distinct ABAC scope) ─────────────────
 
 
-def test_finance_user_gets_chat_response(fin_tokens, api_url):
+def test_legal_user_gets_chat_response(legal_tokens, api_url):
     resp = send_message(
-        message="What financial reports are available?",
-        id_token=fin_tokens.id_token,
+        message="What legal documents are available?",
+        access_token=legal_tokens.access_token,
         api_url=api_url,
     )
     assert isinstance(resp, ChatResponse)
-    assert resp.department == "finance"
+    assert resp.department == "legal"
 
 
 # ─── Unauthorized token ───────────────────────────────────────────────────────
@@ -180,7 +181,7 @@ def test_invalid_jwt_returns_401(api_url):
     with pytest.raises(GatewayError) as exc_info:
         send_message(
             message="Hello",
-            id_token="not.a.valid.jwt",
+            access_token="not.a.valid.jwt",
             api_url=api_url,
         )
     assert exc_info.value.status_code == 401

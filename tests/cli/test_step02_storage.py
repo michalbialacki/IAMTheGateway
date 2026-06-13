@@ -6,9 +6,7 @@ Covers: save, load, clear, needs_refresh, edge cases (corruption, missing entry)
 
 import json
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from cli.auth import AuthTokens
 from cli.storage import _SERVICE, clear_tokens, load_tokens, needs_refresh, save_tokens

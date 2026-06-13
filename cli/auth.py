@@ -1,9 +1,9 @@
 """Cognito authentication for the IAM Gateway CLI.
 
 Handles USER_PASSWORD_AUTH and REFRESH_TOKEN_AUTH flows.
-The IdToken is the JWT sent as Authorization: Bearer to API Gateway —
-it carries the Cognito groups (department + clearance_level) verified
-by the Lambda Authorizer.
+The AccessToken is the JWT sent as Authorization: Bearer to API Gateway —
+the authorizer requires token_use=='access' and reads the Cognito groups
+(department + clearance_level) from its cognito:groups claim.
 """
 
 import os
@@ -42,8 +42,8 @@ class CognitoConfig:
 
 @dataclass(frozen=True)
 class AuthTokens:
-    id_token: str      # JWT sent to API Gateway (contains Cognito groups)
-    access_token: str  # Cognito access token (scoped to Cognito APIs)
+    id_token: str      # Cognito identity token (user profile claims; not sent to API GW)
+    access_token: str  # JWT sent to API Gateway (token_use='access', carries cognito:groups)
     refresh_token: str # Used to obtain new tokens without re-entering password
     expires_in: int    # Seconds until id_token and access_token expire
 

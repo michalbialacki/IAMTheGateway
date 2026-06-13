@@ -16,7 +16,6 @@ Post-apply tests (require AWS):
 
 import importlib.util
 import json
-import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -33,7 +32,7 @@ ENV = "dev"
 STS_LAMBDA_NAME = f"{PROJECT}-{ENV}-sts-session"
 BEDROCK_ROLE = f"{PROJECT}-{ENV}-bedrock-scoped"
 FAKE_ROLE_ARN = f"arn:aws:iam::123456789012:role/{BEDROCK_ROLE}"
-FAKE_MODEL_ID = "amazon.titan-text-express-v1"
+FAKE_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 
 
 # ─── Marks ───────────────────────────────────────────────────────────────────
@@ -61,6 +60,13 @@ def _import_handler():
     spec = importlib.util.spec_from_file_location("sts_handler", _HANDLER_PATH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    # Offline tier: stub out DynamoDB conversation persistence (Phase 06).
+    # These tests exercise the STS / sanitize / KB paths, not history;
+    # persistence is covered in tests/conversation/. Without this stub,
+    # _save_exchange() raises KeyError('CONVERSATION_TABLE') when the full
+    # lambda_handler is invoked offline.
+    mod._save_exchange = lambda *args, **kwargs: None
+    mod._load_history = lambda *args, **kwargs: []
     return mod
 
 
@@ -266,6 +272,7 @@ class TestCacheSafetyIsolation:
 # ─── Post-apply: Lambda env + invocation ─────────────────────────────────────
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_lambda_has_bedrock_model_id():
     import boto3
@@ -277,6 +284,7 @@ def test_lambda_has_bedrock_model_id():
     assert env["BEDROCK_MODEL_ID"] == FAKE_MODEL_ID
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_lambda_invocation_no_message_returns_400():
     """Invoke Lambda directly with empty body → 400 (no AWS GW in path)."""
@@ -291,6 +299,7 @@ def test_lambda_invocation_no_message_returns_400():
     assert result["statusCode"] == 400
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_lambda_invocation_missing_context_returns_403():
     """Invoke Lambda with message but no authorizer context → 403."""
@@ -308,11 +317,13 @@ def test_lambda_invocation_missing_context_returns_403():
     assert result["statusCode"] == 403
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_bedrock_role_trust_policy_has_request_tag_conditions():
     """Trust policy must block assume_role without department + clearance_level tags."""
-    import boto3
     from urllib.parse import unquote
+
+    import boto3
 
     iam = boto3.client("iam", region_name=REGION)
     role = iam.get_role(RoleName=BEDROCK_ROLE)["Role"]

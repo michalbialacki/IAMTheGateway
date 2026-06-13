@@ -4,9 +4,8 @@ Tests the cli/scan.py wrapper over the Lambda sanitizer.
 No mocking needed — patterns are pure Python regex, no AWS calls.
 """
 
-import pytest
 
-from cli.scan import ScanResult, client_scan, format_scan_warning
+from cli.scan import client_scan, format_scan_warning
 
 # ─── is_clean / clean messages ────────────────────────────────────────────────
 

@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-    Destroys cost-generating resources (AOSS + Bedrock KB) while preserving all other infra.
+    Destroys cost-generating resources (AOSS + Bedrock KB) to stop continuous billing.
 
 .DESCRIPTION
     Amazon OpenSearch Serverless (AOSS) is the only resource in this project billed
     continuously regardless of usage: minimum 2 OCU x $0.24/OCU/h = ~$11.52/day.
 
-    This script runs targeted terraform destroy for:
+    This script runs a targeted terraform destroy for:
       - aws_bedrockagent_data_source.kb
       - aws_bedrockagent_knowledge_base.main
       - aws_opensearchserverless_collection.kb
@@ -14,12 +14,18 @@
       - aws_opensearchserverless_security_policy.kb_network
       - aws_opensearchserverless_security_policy.kb_encryption
 
-    Everything else (Lambda, API GW, DynamoDB, S3, Cognito, CloudTrail) costs
-    nothing when idle and is left intact.
+    NOTE: destroying the Knowledge Base cascades to the STS Lambda and API Gateway,
+    because the Lambda env var KNOWLEDGE_BASE_ID references the KB. Those resources
+    are torn down too, but cost nothing idle and are recreated by `terraform apply`.
+    DynamoDB, S3, Cognito, CloudTrail and all IAM roles are preserved.
 
 .NOTES
-    To restore: run `terraform apply` from the terraform/ directory.
-    All state is preserved in S3 remote backend — re-apply recreates AOSS + KB.
+    To restore: run `terraform apply` from the terraform/ directory, then re-create
+    the AOSS index (scripts/create_kb_index.py) between the two applies if needed.
+    All state is preserved in the S3 remote backend.
+
+    Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less .ps1 as
+    Windows-1252, so non-ASCII characters corrupt parsing.
 #>
 
 param(
@@ -29,7 +35,7 @@ param(
 $tf  = "C:\Users\Michal\AppData\Local\Microsoft\WinGet\Packages\Hashicorp.Terraform_Microsoft.Winget.Source_8wekyb3d8bbwe\terraform.exe"
 $dir = "$PSScriptRoot\..\terraform"
 
-# ── Pre-flight ────────────────────────────────────────────────────────────────
+# -- Pre-flight ---------------------------------------------------------------
 
 if (-not (Test-Path $tf)) {
     Write-Error "terraform.exe not found at: $tf"
@@ -43,10 +49,10 @@ if (-not (Test-Path $dir)) {
 
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Yellow
-Write-Host "  IAM Gateway – Stop Costs" -ForegroundColor Yellow
+Write-Host "  IAM Gateway - Stop Costs" -ForegroundColor Yellow
 Write-Host "=========================================" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "Resources to DESTROY (cost drivers):" -ForegroundColor Red
+Write-Host "Resources to DESTROY - cost drivers:" -ForegroundColor Red
 Write-Host "  - aws_bedrockagent_data_source.kb"
 Write-Host "  - aws_bedrockagent_knowledge_base.main"
 Write-Host "  - aws_opensearchserverless_collection.kb"
@@ -54,8 +60,10 @@ Write-Host "  - aws_opensearchserverless_access_policy.kb"
 Write-Host "  - aws_opensearchserverless_security_policy.kb_network"
 Write-Host "  - aws_opensearchserverless_security_policy.kb_encryption"
 Write-Host ""
-Write-Host "Resources PRESERVED (idle = no cost):" -ForegroundColor Green
-Write-Host "  - Lambda, API Gateway, DynamoDB, S3, Cognito, CloudTrail, IAM"
+Write-Host "Also torn down (cascade via KB reference, idle = no cost):" -ForegroundColor DarkYellow
+Write-Host "  - STS Lambda + API Gateway integration/stage/deployment"
+Write-Host ""
+Write-Host "Preserved: DynamoDB, S3, Cognito, CloudTrail, IAM roles" -ForegroundColor Green
 Write-Host ""
 Write-Host "Estimated savings: ~`$11.52/day (~`$345/month)" -ForegroundColor Cyan
 Write-Host "To restore: cd terraform; terraform apply" -ForegroundColor Cyan
@@ -69,7 +77,7 @@ if (-not $Force) {
     }
 }
 
-# ── Targeted destroy (dependency order: data source → KB → AOSS) ─────────────
+# -- Targeted destroy (dependency order: data source -> KB -> AOSS) ------------
 
 $targets = @(
     "aws_bedrockagent_data_source.kb",

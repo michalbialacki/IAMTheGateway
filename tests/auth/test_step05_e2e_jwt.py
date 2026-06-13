@@ -59,6 +59,12 @@ skip_no_infra = pytest.mark.skipif(
     reason="AWS credentials or deployed API Gateway not available",
 )
 
+# Every test here hits the deployed API Gateway → Lambda over HTTPS, so the whole
+# module belongs to the live `aws` tier (deselected in the offline run). It does
+# NOT require AOSS: the success-path tests accept a 502 (Bedrock/KB not enabled),
+# so a base apply without OpenSearch is enough.
+pytestmark = pytest.mark.aws
+
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 

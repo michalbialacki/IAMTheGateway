@@ -6,11 +6,15 @@ Unit tests (no AWS):
   - cl=1 filter has lessThanOrEquals:1, not 3 (clearance ceiling)
   - body-level department/clearance override attempts are ignored
 
-Integration tests (@pytest.mark.integration, require live AWS + AOSS ACTIVE):
-  - alpha/cl=1 → only alpha docs, only cl<=1 (no cl=2+)
-  - alpha/cl=3 → only alpha docs, cl=0–3 reachable (hierarchical access)
-  - bravo/cl=2 → only bravo docs (no alpha cross-contamination)
-  - cross-tenant: filter alpha/3 returns zero bravo docs
+Integration tests (@pytest.mark.aoss, require live AWS + AOSS ACTIVE):
+  - engineering/cl=1 → only engineering docs, only cl<=1 (no cl=2+)
+  - engineering/cl=3 → only engineering docs, cl=0–3 reachable (hierarchical access)
+  - legal/cl=2 → only legal docs (no engineering cross-contamination)
+  - cross-tenant: filter engineering/3 returns zero legal docs
+
+Live department names match scripts/ingest_docs.py (engineering, legal, security).
+Unit tests above use alpha/bravo as arbitrary department strings to exercise the
+filter builder — they are independent of which departments exist in the KB.
 """
 
 import importlib.util
@@ -44,6 +48,13 @@ def _load_handler():
     spec = importlib.util.spec_from_file_location("sts_handler_iso", _HANDLER_PATH)
     mod  = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    # Offline tier: stub out DynamoDB conversation persistence (Phase 06).
+    # These tests exercise the STS / sanitize / KB paths, not history;
+    # persistence is covered in tests/conversation/. Without this stub,
+    # _save_exchange() raises KeyError('CONVERSATION_TABLE') when the full
+    # lambda_handler is invoked offline.
+    mod._save_exchange = lambda *args, **kwargs: None
+    mod._load_history = lambda *args, **kwargs: []
     return mod
 
 
@@ -269,57 +280,64 @@ def _live_retrieve(ctx, dept: str, cl: int, query: str = "department clearance t
     return [r.get("metadata", {}) for r in response.get("retrievalResults", [])]
 
 
-@pytest.mark.integration
+@pytest.mark.aoss
 class TestLiveAbacIsolation:
-    """Verify ABAC enforcement via live Bedrock retrieve calls."""
+    """Verify ABAC enforcement via live Bedrock retrieve calls.
 
-    def test_alpha_cl1_returns_only_alpha_dept(self, bedrock_context):
-        metas = _live_retrieve(bedrock_context, "alpha", 1)
+    Departments match scripts/ingest_docs.py: engineering, legal, security.
+    """
+
+    def test_engineering_cl1_returns_only_engineering_dept(self, bedrock_context):
+        metas = _live_retrieve(bedrock_context, "engineering", 1)
         assert metas, "No results — run scripts/ingest_docs.py first"
         for m in metas:
-            assert m.get("department") == "alpha", f"Expected alpha, got: {m}"
+            assert m.get("department") == "engineering", f"Expected engineering, got: {m}"
 
-    def test_alpha_cl1_returns_only_cl_le_1(self, bedrock_context):
-        metas = _live_retrieve(bedrock_context, "alpha", 1)
+    def test_engineering_cl1_returns_only_cl_le_1(self, bedrock_context):
+        metas = _live_retrieve(bedrock_context, "engineering", 1)
         assert metas, "No results — run scripts/ingest_docs.py first"
         for m in metas:
             assert int(m["clearance_level"]) <= 1, (
                 f"cl=1 user got doc with clearance_level={m['clearance_level']}"
             )
 
-    def test_alpha_cl3_returns_only_alpha_dept(self, bedrock_context):
-        metas = _live_retrieve(bedrock_context, "alpha", 3)
+    def test_engineering_cl3_returns_only_engineering_dept(self, bedrock_context):
+        metas = _live_retrieve(bedrock_context, "engineering", 3)
         assert metas, "No results — run scripts/ingest_docs.py first"
         for m in metas:
-            assert m.get("department") == "alpha", f"Expected alpha, got: {m}"
+            assert m.get("department") == "engineering", f"Expected engineering, got: {m}"
 
-    def test_alpha_cl3_no_bravo_docs(self, bedrock_context):
-        metas = _live_retrieve(bedrock_context, "alpha", 3)
-        bravo_docs = [m for m in metas if m.get("department") == "bravo"]
-        assert not bravo_docs, f"Cross-tenant leak: alpha/cl=3 retrieved bravo docs: {bravo_docs}"
+    def test_engineering_cl3_no_legal_docs(self, bedrock_context):
+        metas = _live_retrieve(bedrock_context, "engineering", 3)
+        legal_docs = [m for m in metas if m.get("department") == "legal"]
+        assert not legal_docs, (
+            f"Cross-tenant leak: engineering/cl=3 retrieved legal docs: {legal_docs}"
+        )
 
-    def test_bravo_cl2_returns_only_bravo_dept(self, bedrock_context):
-        metas = _live_retrieve(bedrock_context, "bravo", 2)
+    def test_legal_cl2_returns_only_legal_dept(self, bedrock_context):
+        metas = _live_retrieve(bedrock_context, "legal", 2)
         assert metas, "No results — run scripts/ingest_docs.py first"
         for m in metas:
-            assert m.get("department") == "bravo", f"Expected bravo, got: {m}"
+            assert m.get("department") == "legal", f"Expected legal, got: {m}"
 
-    def test_bravo_cl2_no_alpha_docs(self, bedrock_context):
-        metas = _live_retrieve(bedrock_context, "bravo", 2)
-        alpha_docs = [m for m in metas if m.get("department") == "alpha"]
-        assert not alpha_docs, f"Cross-tenant leak: bravo/cl=2 retrieved alpha docs: {alpha_docs}"
+    def test_legal_cl2_no_engineering_docs(self, bedrock_context):
+        metas = _live_retrieve(bedrock_context, "legal", 2)
+        eng_docs = [m for m in metas if m.get("department") == "engineering"]
+        assert not eng_docs, (
+            f"Cross-tenant leak: legal/cl=2 retrieved engineering docs: {eng_docs}"
+        )
 
-    def test_alpha_cl1_no_restricted_docs(self, bedrock_context):
+    def test_engineering_cl1_no_restricted_docs(self, bedrock_context):
         """cl=1 user must not see cl=2 or cl=3 documents."""
-        metas = _live_retrieve(bedrock_context, "alpha", 1)
+        metas = _live_retrieve(bedrock_context, "engineering", 1)
         restricted = [m for m in metas if int(m.get("clearance_level", 0)) > 1]
         assert not restricted, (
             f"cl=1 user retrieved documents above clearance: {restricted}"
         )
 
-    def test_alpha_cl3_sees_lower_clearance_docs(self, bedrock_context):
+    def test_engineering_cl3_sees_lower_clearance_docs(self, bedrock_context):
         """cl=3 user has hierarchical access — must see documents at cl=0, 1, 2, 3."""
-        metas = _live_retrieve(bedrock_context, "alpha", 3)
+        metas = _live_retrieve(bedrock_context, "engineering", 3)
         found_levels = {int(m["clearance_level"]) for m in metas if "clearance_level" in m}
         # Must find at least one doc at each level ≤ 3
         assert found_levels, "No results with clearance_level metadata"

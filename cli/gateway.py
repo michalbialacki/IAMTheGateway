@@ -1,8 +1,9 @@
 """API Gateway HTTP client for the IAM Gateway CLI.
 
 Sends authenticated POST /chat requests and returns structured responses.
-The IdToken from Cognito is passed as a Bearer token; API Gateway's Lambda
-Authorizer validates it and extracts ABAC context (department, clearance_level).
+The Cognito access token is passed as a Bearer token; API Gateway's Lambda
+Authorizer requires token_use=='access', validates it, and extracts ABAC context
+(department, clearance_level) from the cognito:groups claim.
 """
 
 from dataclasses import dataclass
@@ -40,7 +41,7 @@ class GatewayError(Exception):
 
 def send_message(
     message: str,
-    id_token: str,
+    access_token: str,
     api_url: str,
     session_id: str | None = None,
     timeout: int = _DEFAULT_TIMEOUT,
@@ -48,8 +49,9 @@ def send_message(
     """POST /chat to API Gateway and return the model's response.
 
     Args:
-        message:    Sanitized user message (PII already redacted by client_scan).
-        id_token:   Cognito IdToken (JWT) for the Authorization header.
+        message:      Sanitized user message (PII already redacted by client_scan).
+        access_token: Cognito access token (JWT) for the Authorization header.
+                      The authorizer rejects id tokens (token_use must be 'access').
         api_url:    Full chat endpoint URL, e.g. https://{id}.execute-api.{region}.amazonaws.com/prod/chat
         session_id: If provided, continues an existing conversation (sent in request body).
         timeout:    HTTP request timeout in seconds.
@@ -66,7 +68,7 @@ def send_message(
             api_url,
             json=body,
             headers={
-                "Authorization": f"Bearer {id_token}",
+                "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
             },
             timeout=timeout,

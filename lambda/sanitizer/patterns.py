@@ -69,8 +69,11 @@ INJECTION_PATTERNS: list[Pattern] = [
     Pattern(
         name="ignore_instructions",
         regex=re.compile(
-            r"\bignore\s+(previous|above|all|prior|your)\s+"
-            r"(instructions?|prompts?|context|rules?|constraints?)\b",
+            # Allow one or more stacked qualifiers, e.g. "ignore all previous
+            # instructions" — a single-qualifier pattern missed the doubled form.
+            r"\bignore\s+"
+            r"(?:(?:all|the|any|previous|prior|above|preceding|earlier|your|these|those)\s+){1,4}"
+            r"(instructions?|prompts?|context|rules?|constraints?|directions?|directives?)\b",
             re.IGNORECASE,
         ),
         redact_label="[BLOCKED_INJECTION]",

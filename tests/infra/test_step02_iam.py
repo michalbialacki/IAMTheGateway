@@ -36,7 +36,6 @@ def _tf(args: list[str]) -> subprocess.CompletedProcess:
 def _aws_credentials_available() -> bool:
     try:
         import boto3
-        from botocore.exceptions import NoCredentialsError, ClientError
 
         boto3.client("sts", region_name=REGION).get_caller_identity()
         return True
@@ -73,6 +72,7 @@ def test_main_fmt_clean():
 
 # ─── post-apply tests (require AWS credentials) ───────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_lambda_exec_role_exists():
     import boto3
@@ -82,6 +82,7 @@ def test_lambda_exec_role_exists():
     assert role["RoleName"] == LAMBDA_ROLE
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_lambda_exec_role_has_required_policies():
     import boto3
@@ -93,6 +94,7 @@ def test_lambda_exec_role_has_required_policies():
     assert "dynamodb-project-tables" in policies
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_bedrock_scoped_role_exists():
     import boto3
@@ -102,10 +104,12 @@ def test_bedrock_scoped_role_exists():
     assert role["RoleName"] == BEDROCK_ROLE
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_bedrock_scoped_role_trust_principal_is_lambda_exec():
-    import boto3
     from urllib.parse import unquote
+
+    import boto3
 
     iam = boto3.client("iam", region_name=REGION)
     role = iam.get_role(RoleName=BEDROCK_ROLE)["Role"]
@@ -121,6 +125,7 @@ def test_bedrock_scoped_role_trust_principal_is_lambda_exec():
     )
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_bedrock_policy_requires_session_tags():
     import boto3

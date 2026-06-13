@@ -1,0 +1,77 @@
+name: CI
+
+# Offline-only pipeline: lint, the free test tiers, Terraform static checks and a
+# secrets scan. It never needs AWS credentials and never touches OpenSearch/Bedrock
+# (the paid `aws`/`aoss` test tiers are deselected). Live tiers run manually in Step 05.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-test:
+    name: Ruff + offline tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies (locked)
+        # uv provisions a CPython matching requires-python (>=3.12) and installs the
+        # exact versions from uv.lock; --frozen fails if the lock is out of date.
+        run: uv sync --frozen --dev
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Offline test tier
+        # Excludes every test needing live AWS (aws) or OpenSearch+Bedrock KB (aoss).
+        run: uv run pytest -m "not aws and not aoss" -q
+
+  terraform:
+    name: Terraform fmt + validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Format check
+        run: terraform -chdir=terraform fmt -check -recursive -no-color
+
+      - name: Init (no backend) + validate
+        # -backend=false skips the S3 backend (gitignored backend.tf) and AWS creds.
+        # validate still downloads the AWS provider to type-check the configuration.
+        run: |
+          terraform -chdir=terraform init -backend=false -no-color
+          terraform -chdir=terraform validate -no-color
+
+  secrets-scan:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so gitleaks can scan past commits
+
+      - name: Run gitleaks
+        run: |
+          version=8.21.2
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks detect --source . --redact --no-banner --verbose

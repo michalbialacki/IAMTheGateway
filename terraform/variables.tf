@@ -27,9 +27,13 @@ variable "cognito_departments" {
 }
 
 variable "bedrock_model_id" {
-  description = "Bedrock foundation model ID used for generation"
+  # Must be (a) supported by Bedrock KB RetrieveAndGenerate and (b) ON_DEMAND in
+  # var.aws_region, so the foundation-model ARN format works without a cross-region
+  # inference profile. Claude 3 Haiku is the only such model in eu-central-1.
+  # NOTE: requires manual model-access enablement in the Bedrock console.
+  description = "Bedrock foundation model ID used for KB generation (RAG-supported, ON_DEMAND)"
   type        = string
-  default     = "amazon.titan-text-express-v1"
+  default     = "anthropic.claude-3-haiku-20240307-v1:0"
 }
 
 variable "clearance_levels" {

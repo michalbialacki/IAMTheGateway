@@ -6,7 +6,7 @@ are mocked at the module level.
 """
 
 import os
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
 import pytest
 

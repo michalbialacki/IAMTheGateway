@@ -18,7 +18,6 @@ from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
-
 from sanitizer.policy import ClearancePolicy, get_policy
 from sanitizer.sandwich import build_sandwich_prompt
 from sanitizer.sanitizer import scan_input

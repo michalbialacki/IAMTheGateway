@@ -126,7 +126,7 @@ def run_chat_loop(
         try:
             resp = send_message(
                 message=scan_result.redacted_text,
-                id_token=tokens.id_token,
+                access_token=tokens.access_token,
                 api_url=api_url,
                 session_id=session_id,
             )

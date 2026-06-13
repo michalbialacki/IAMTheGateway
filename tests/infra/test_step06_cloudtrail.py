@@ -65,6 +65,7 @@ def test_main_fmt_clean():
 
 # ─── post-apply: CloudTrail ───────────────────────────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_trail_exists_and_logging():
     import boto3
@@ -78,6 +79,7 @@ def test_trail_exists_and_logging():
     assert status["IsLogging"] is True
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_trail_is_multi_region():
     import boto3
@@ -86,6 +88,7 @@ def test_trail_is_multi_region():
     assert trail["IsMultiRegionTrail"] is True
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_trail_log_file_validation_enabled():
     import boto3
@@ -94,6 +97,7 @@ def test_trail_log_file_validation_enabled():
     assert trail["LogFileValidationEnabled"] is True
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_trail_sends_to_cloudwatch():
     import boto3
@@ -105,6 +109,7 @@ def test_trail_sends_to_cloudwatch():
 
 # ─── post-apply: CloudWatch Log Group ────────────────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_log_group_exists_with_retention():
     import boto3
@@ -116,6 +121,7 @@ def test_log_group_exists_with_retention():
 
 # ─── post-apply: metric filters ──────────────────────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_unauthorized_api_calls_metric_filter_exists():
     import boto3
@@ -128,6 +134,7 @@ def test_unauthorized_api_calls_metric_filter_exists():
     assert filters[0]["metricTransformations"][0]["metricName"] == "UnauthorizedApiCalls"
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_sts_assume_role_metric_filter_exists():
     import boto3

@@ -80,6 +80,7 @@ def test_main_fmt_clean():
 # ─── post-apply: REST API ─────────────────────────────────────────────────────
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_rest_api_exists():
     import boto3
@@ -91,6 +92,7 @@ def test_rest_api_exists():
     assert api["endpointConfiguration"]["types"] == ["REGIONAL"]
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_chat_resource_exists():
     import boto3
@@ -105,6 +107,7 @@ def test_chat_resource_exists():
 # ─── post-apply: JWT authorizer ───────────────────────────────────────────────
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_jwt_authorizer_is_token_type():
     import boto3
@@ -118,6 +121,7 @@ def test_jwt_authorizer_is_token_type():
     assert jwt_auth["identitySource"] == "method.request.header.Authorization"
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_jwt_authorizer_ttl_is_zero():
     """TTL=0 ensures revocation takes effect on every request."""
@@ -134,6 +138,7 @@ def test_jwt_authorizer_ttl_is_zero():
 # ─── post-apply: POST /chat method ───────────────────────────────────────────
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_chat_post_uses_custom_authorization():
     import boto3
@@ -155,6 +160,7 @@ def test_chat_post_uses_custom_authorization():
 # ─── post-apply: throttling ───────────────────────────────────────────────────
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_stage_throttling_configured():
     import boto3

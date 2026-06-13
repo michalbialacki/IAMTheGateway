@@ -11,11 +11,9 @@ import importlib.util
 import json
 import re
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
-
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _HANDLER_PATH = REPO_ROOT / "lambda" / "sts" / "handler.py"

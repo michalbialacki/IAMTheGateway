@@ -76,6 +76,7 @@ def test_main_fmt_clean():
 
 # ─── post-apply tests ─────────────────────────────────────────────────────────
 
+@pytest.mark.aws
 @skip_no_aws
 def test_bucket_exists():
     import boto3
@@ -84,6 +85,7 @@ def test_bucket_exists():
     s3.head_bucket(Bucket=bucket)
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_bucket_versioning_enabled():
     import boto3
@@ -93,6 +95,7 @@ def test_bucket_versioning_enabled():
     assert resp.get("Status") == "Enabled", f"Versioning not enabled: {resp}"
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_bucket_sse_kms():
     import boto3
@@ -106,6 +109,7 @@ def test_bucket_sse_kms():
     assert rules[0].get("BucketKeyEnabled") is True
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_bucket_public_access_fully_blocked():
     import boto3
@@ -119,6 +123,7 @@ def test_bucket_public_access_fully_blocked():
     assert cfg["RestrictPublicBuckets"] is True
 
 
+@pytest.mark.aws
 @skip_no_aws
 def test_bucket_policy_denies_non_tls():
     import boto3

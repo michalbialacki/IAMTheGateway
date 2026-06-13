@@ -18,8 +18,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _HANDLER_PATH  = REPO_ROOT / "lambda" / "sts" / "handler.py"
 _SANDWICH_PATH = REPO_ROOT / "lambda" / "sanitizer" / "sandwich.py"

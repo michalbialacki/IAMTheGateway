@@ -15,7 +15,8 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 markers = [
-    "integration: requires live AWS credentials (deselect with -m 'not integration')",
+    "aws: requires live AWS credentials but NOT AOSS/Bedrock KB (cost ~$0; run with -m 'aws and not aoss')",
+    "aoss: requires Amazon OpenSearch Serverless ACTIVE + Bedrock KB (paid tier ~$1/2h; run with -m 'aoss')",
 ]
 
 [tool.ruff]
@@ -25,6 +26,13 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Bedrock metadataFilter API keys are camelCase (andAll, orAll, lessThanOrEquals).
+# These test names mirror the literal API identifiers verbatim for traceability,
+# so N802 (snake_case function names) is intentionally relaxed here.
+"tests/kb/test_step03_metadata_filter.py" = ["N802"]
+"tests/kb/test_step05_abac_isolation.py" = ["N802"]
 
 [dependency-groups]
 dev = [
