@@ -122,3 +122,35 @@ Dodatkowo: `permissions: contents: read` (least-privilege dla `GITHUB_TOKEN`) + 
 **Uwaga na przyszłość (cross-region — nie wzięte pod uwagę w tym projekcie):** Wybór modelu zawęził się do in-region dopiero po napotkaniu blockera; cross-region inference profiles (Nova, nowsze Claude) świadomie odrzucono ze względu na routing danych poza Frankfurt. To jednak otwiera **pomysł na osobny projekt**: bramka GenAI świadomie wykorzystująca cross-region inference profiles — np. routing/load-balancing modeli po regionach EU z politykami data-residency per tenant, albo failover między regionami. Wątek do osobnego PoC, poza zakresem IAM Gateway.
 
 **Testy:** Po fixach — offline tier `-m "not aws and not aoss"` = **599 passed / 0 failed / 2 xfailed** (nowy test injection), `ruff check .` = czysto, `terraform fmt -check` = czysto, `terraform validate` = Success. Live tier `aoss` z nowym modelem: **do walidacji w następnym oknie** (po włączeniu model access).
+
+## Step 05b – Walidacja tieru `aoss` (kolejne okno — finalna sesja Phase 08)
+
+**Co zrobiono:** Uruchomiono pełny tier `aoss` z kolejnym zestawem fixów, które blokowały walidację. Zidentyfikowano i naprawiono 4 nowe problemy odkryte dopiero live.
+
+**Blockers i fixy (kolejność odkrycia):**
+
+1. **Stare dane `alpha/bravo` w S3 (root cause pustego retrieve):** Bucket Knowledge Base zawierał dokumenty z wczesnych sesji (`docs/alpha/`, `docs/bravo/`) sprzed zmiany departamentów w Step 02. Nowy `ingest_docs.py` dodawał `engineering/legal/security` ale nie usuwał starych plików — Bedrock indeksował wszystko, a zapytanie o `department=engineering` trafiało w dokumenty `alpha/bravo`. Naprawka: dodano `purge_docs_prefix()` do `ingest_docs.py` — czyści prefix `docs/` przed uploadem.
+
+2. **Claude 3 Haiku oznaczony jako LEGACY (niedostępny):** Model `anthropic.claude-3-haiku-20240307-v1:0` zwrócił `ResourceNotFoundException: model marked as Legacy`. Strona Model Access w konsoli zlikwidowana — modele aktywują się automatycznie przy pierwszym wywołaniu, ale Haiku 3 jest wycofany. Nowy mechanizm dla eu-central-1: cross-region inference profiles. Wybrano `eu.amazon.nova-lite-v1:0` (Amazon-native, zero Marketplace, najtańszy, ACTIVE).
+
+3. **Zły format ARN inference profile (`::` zamiast account ID):** Pierwsze wywołanie z ARN `arn:aws:bedrock:eu-central-1::inference-profile/eu.amazon.nova-lite-v1:0` zwróciło `ValidationException: GetInferenceProfile`. `get_inference_profile` ujawnił właściwy ARN: `arn:aws:bedrock:eu-central-1:606025553345:inference-profile/eu.amazon.nova-lite-v1:0` (z account ID). Poprawiono `lambda_sts.tf`: `BEDROCK_KB_MODEL_ARN` używa teraz `${local.account_id}`.
+
+4. **Brakujące `bedrock:GetInferenceProfile` w polityce IAM:** Po poprawieniu ARN pojawił się `AccessDeniedException: Not authorized to call GetInferenceProfile`. Bedrock wywołuje `GetInferenceProfile` wewnętrznie podczas `RetrieveAndGenerate` z inference profile ARN, a `bedrock_scoped` rola nie miała tej akcji. Dodano do `iam.tf` (statement `BedrockRetrieveRequireSessionTags`) i do session policy w `lambda/sts/handler.py`.
+
+**Wynik końcowy:** `uv run pytest -m "aoss"` = **48 passed / 0 failed** — tier `aoss` zielony. Wszystkie trzy tiery zaliczone.
+
+**Kompromisy:** Nova Lite zamiast Claude Haiku — model jest tańszy i Amazon-native, ale odpowiedzi są mniej "konwersacyjne". Dla PoC demonstrującego ABAC/RAG izolację to bez znaczenia. Typed metadata format (`{"type": "STRING", ...}`) w sidecarach okazał się błędny — Bedrock nie parsuje go poprawnie i nie indeksuje dokumentów. Przywrócono prosty format (bare values). KnownLimitations zaktualizowane o KL-08 (obowiązkowy `create_kb_index.py` przed `terraform apply`).
+
+**Testy:** Tier `aws`: **56 passed / 8 skipped / 0 findingów**. Tier `aoss`: **48/48 passed**. Offline: **599 passed / 0 failed / 2 xfailed**.
+
+---
+## Podsumowanie fazy 08
+
+**Co zostało zbudowane:** Kompletny pipeline CI/CD + trójwarstwowy system testów (offline/aws/aoss) z precyzyjnymi markerami kosztowymi. GitHub Actions pipeline weryfikuje offline tier + ruff + terraform validate na każdym push bez dotykania AWS. Security audit potwierdził brak hardcoded secrets, least-privilege IAM i szczelny `.gitignore`.
+
+**Jak działa:** Testy uruchamiane są warstwami od najtańszej: `not aws and not aoss` (bezpłatne, 599 testów) → `aws and not aoss` (~$0, weryfikacja auth/ABAC/infra) → `aoss` (płatne okno, pełna e2e z RAG). Każdy tier uruchamia się niezależnie; AOSS niszczy się przez `stop_costs.ps1` po każdej sesji.
+
+**Co można dalej rozwinąć:**
+- Phase 09: KMP Android Client (Cognito Amplify, Android Keystore, Compose UI)
+- Phase 10: Output sanitization przez Bedrock Guardrails lub LLM-judge
+- Automatyczne uruchamianie tieru `aws` w CI przez OIDC (bez long-lived credentials)

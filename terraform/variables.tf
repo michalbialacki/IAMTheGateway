@@ -27,13 +27,13 @@ variable "cognito_departments" {
 }
 
 variable "bedrock_model_id" {
-  # Must be (a) supported by Bedrock KB RetrieveAndGenerate and (b) ON_DEMAND in
-  # var.aws_region, so the foundation-model ARN format works without a cross-region
-  # inference profile. Claude 3 Haiku is the only such model in eu-central-1.
-  # NOTE: requires manual model-access enablement in the Bedrock console.
-  description = "Bedrock foundation model ID used for KB generation (RAG-supported, ON_DEMAND)"
+  # Must be a cross-region inference profile available in var.aws_region that
+  # supports Bedrock KB RetrieveAndGenerate. Amazon Nova Lite is Amazon-native
+  # (no Marketplace subscription required) and the cheapest RAG-capable option
+  # in eu-central-1. Claude 3 Haiku ON_DEMAND was retired as LEGACY 2025-06.
+  description = "Bedrock inference profile ID used for KB generation (RAG-supported, eu cross-region)"
   type        = string
-  default     = "anthropic.claude-3-haiku-20240307-v1:0"
+  default     = "eu.amazon.nova-lite-v1:0"
 }
 
 variable "clearance_levels" {

@@ -149,6 +149,7 @@ def _build_session_policy(department: str) -> str:
                 "bedrock:RetrieveAndGenerate",
                 "bedrock:Retrieve",
                 "bedrock:InvokeModel",
+                "bedrock:GetInferenceProfile",
             ],
             "Resource": "*",
             "Condition": {

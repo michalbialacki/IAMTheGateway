@@ -118,6 +118,7 @@ resource "aws_iam_role_policy" "bedrock_scoped_permissions" {
         Action = [
           "bedrock:RetrieveAndGenerate",
           "bedrock:Retrieve",
+          "bedrock:GetInferenceProfile",
         ]
         Resource = "*"
         Condition = {
@@ -129,10 +130,13 @@ resource "aws_iam_role_policy" "bedrock_scoped_permissions" {
         }
       },
       {
-        Sid      = "BedrockInvokeModelRequireSessionTags"
-        Effect   = "Allow"
-        Action   = "bedrock:InvokeModel"
-        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"
+        Sid    = "BedrockInvokeModelRequireSessionTags"
+        Effect = "Allow"
+        Action = "bedrock:InvokeModel"
+        Resource = [
+          "arn:aws:bedrock:${var.aws_region}:${local.account_id}:inference-profile/${var.bedrock_model_id}",
+          "arn:aws:bedrock:*::foundation-model/*",
+        ]
         Condition = {
           Null = {
             "aws:PrincipalTag/department"      = "false"

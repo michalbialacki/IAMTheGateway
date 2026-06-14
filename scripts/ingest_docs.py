@@ -99,6 +99,20 @@ def _tf_output(name: str) -> str:
     return result.stdout.strip()
 
 
+def purge_docs_prefix(s3_client, bucket_name: str) -> None:
+    """Delete all objects under docs/ prefix to remove stale data from prior sessions."""
+    paginator = s3_client.get_paginator("list_objects_v2")
+    keys_to_delete = []
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=f"{DOC_PREFIX}/"):
+        for obj in page.get("Contents", []):
+            keys_to_delete.append({"Key": obj["Key"]})
+    if keys_to_delete:
+        s3_client.delete_objects(Bucket=bucket_name, Delete={"Objects": keys_to_delete})
+        print(f"  purged {len(keys_to_delete)} stale objects from {DOC_PREFIX}/")
+    else:
+        print(f"  no stale objects under {DOC_PREFIX}/")
+
+
 def upload_documents(s3_client, bucket_name: str) -> list[str]:
     """Upload all test documents and sidecar .metadata.json files to S3.
 
@@ -181,6 +195,9 @@ def main() -> None:
     session       = boto3.Session(region_name=REGION)
     s3_client     = session.client("s3")
     bedrock_agent = session.client("bedrock-agent")
+
+    print("\nPurging stale docs from S3...")
+    purge_docs_prefix(s3_client, bucket_name)
 
     print("\nUploading documents...")
     upload_documents(s3_client, bucket_name)
