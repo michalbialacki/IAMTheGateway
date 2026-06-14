@@ -8,6 +8,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TF_DIR    = REPO_ROOT / "terraform"
 
@@ -15,12 +17,13 @@ _WIN_TF = (
     "C:/Users/Michal/AppData/Local/Microsoft/WinGet/Packages/"
     "Hashicorp.Terraform_Microsoft.Winget.Source_8wekyb3d8bbwe/terraform.exe"
 )
-TF_BIN = _WIN_TF if Path(_WIN_TF).exists() else (shutil.which("terraform") or "terraform")
+TF_BIN = _WIN_TF if Path(_WIN_TF).exists() else shutil.which("terraform")
+_TF_AVAILABLE = TF_BIN is not None
 
 
 def _tf(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [TF_BIN, *args],
+        [str(TF_BIN), *args],
         cwd=TF_DIR,
         capture_output=True,
         text=True,
@@ -30,6 +33,7 @@ def _tf(*args: str) -> subprocess.CompletedProcess:
 # ─── terraform validate ───────────────────────────────────────────────────────
 
 
+@pytest.mark.skipif(not _TF_AVAILABLE, reason="terraform binary not found; validated in the dedicated CI 'terraform' job")
 def test_terraform_validate():
     """bedrock_kb.tf passes terraform validate (syntax + reference check)."""
     result = _tf("validate", "-no-color")
