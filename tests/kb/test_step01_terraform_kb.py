@@ -4,15 +4,18 @@ Validates that bedrock_kb.tf is syntactically correct and references
 all required resources without AWS credentials (local validation only).
 """
 
+import shutil
 import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TF_DIR    = REPO_ROOT / "terraform"
-TF_BIN    = (
+
+_WIN_TF = (
     "C:/Users/Michal/AppData/Local/Microsoft/WinGet/Packages/"
     "Hashicorp.Terraform_Microsoft.Winget.Source_8wekyb3d8bbwe/terraform.exe"
 )
+TF_BIN = _WIN_TF if Path(_WIN_TF).exists() else (shutil.which("terraform") or "terraform")
 
 
 def _tf(*args: str) -> subprocess.CompletedProcess:

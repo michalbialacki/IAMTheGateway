@@ -9,6 +9,8 @@ import json
 
 import pytest
 
+pytestmark = pytest.mark.aws
+
 EXPECTED = {
     "alice@test.local": "dept_engineering_cl_2",
     "bob@test.local":   "dept_legal_cl_1",
